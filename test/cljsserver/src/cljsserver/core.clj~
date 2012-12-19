@@ -1,0 +1,15 @@
+(ns cljsserver.core
+  (:use compojure.core
+        ring.adapter.jetty
+        hiccup.core
+        hiccup.page )
+  (:require [compojure.handler :as handler]
+            [compojure.route :as route]))
+
+(def routes
+  (GET "/" [] (html5
+               (include-js "/main.js")
+(defn -main
+  "I don't do a whole lot."
+  [& args]
+  (println "Hello, World!"))
