@@ -497,15 +497,6 @@ goog.base = function(me, opt_methodName, var_args) {
 goog.scope = function(fn) {
   fn.call(goog.global)
 };
-goog.provide("goog.debug.Error");
-goog.debug.Error = function(opt_msg) {
-  this.stack = (new Error).stack || "";
-  if(opt_msg) {
-    this.message = String(opt_msg)
-  }
-};
-goog.inherits(goog.debug.Error, Error);
-goog.debug.Error.prototype.name = "CustomError";
 goog.provide("goog.string");
 goog.provide("goog.string.Unicode");
 goog.string.Unicode = {NBSP:"\u00a0"};
@@ -933,6 +924,163 @@ goog.string.toSelectorCaseCache_ = {};
 goog.string.toSelectorCase = function(str) {
   return goog.string.toSelectorCaseCache_[str] || (goog.string.toSelectorCaseCache_[str] = String(str).replace(/([A-Z])/g, "-$1").toLowerCase())
 };
+goog.provide("goog.userAgent.jscript");
+goog.require("goog.string");
+goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
+goog.userAgent.jscript.init_ = function() {
+  var hasScriptEngine = "ScriptEngine" in goog.global;
+  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ = hasScriptEngine && goog.global["ScriptEngine"]() == "JScript";
+  goog.userAgent.jscript.DETECTED_VERSION_ = goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ? goog.global["ScriptEngineMajorVersion"]() + "." + goog.global["ScriptEngineMinorVersion"]() + "." + goog.global["ScriptEngineBuildVersion"]() : "0"
+};
+if(!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
+  goog.userAgent.jscript.init_()
+}
+goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ? false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
+goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ? "0" : goog.userAgent.jscript.DETECTED_VERSION_;
+goog.userAgent.jscript.isVersion = function(version) {
+  return goog.string.compareVersions(goog.userAgent.jscript.VERSION, version) >= 0
+};
+goog.provide("goog.string.StringBuffer");
+goog.require("goog.userAgent.jscript");
+goog.string.StringBuffer = function(opt_a1, var_args) {
+  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : "";
+  if(opt_a1 != null) {
+    this.append.apply(this, arguments)
+  }
+};
+goog.string.StringBuffer.prototype.set = function(s) {
+  this.clear();
+  this.append(s)
+};
+if(goog.userAgent.jscript.HAS_JSCRIPT) {
+  goog.string.StringBuffer.prototype.bufferLength_ = 0;
+  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+    if(opt_a2 == null) {
+      this.buffer_[this.bufferLength_++] = a1
+    }else {
+      this.buffer_.push.apply(this.buffer_, arguments);
+      this.bufferLength_ = this.buffer_.length
+    }
+    return this
+  }
+}else {
+  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
+    this.buffer_ += a1;
+    if(opt_a2 != null) {
+      for(var i = 1;i < arguments.length;i++) {
+        this.buffer_ += arguments[i]
+      }
+    }
+    return this
+  }
+}
+goog.string.StringBuffer.prototype.clear = function() {
+  if(goog.userAgent.jscript.HAS_JSCRIPT) {
+    this.buffer_.length = 0;
+    this.bufferLength_ = 0
+  }else {
+    this.buffer_ = ""
+  }
+};
+goog.string.StringBuffer.prototype.getLength = function() {
+  return this.toString().length
+};
+goog.string.StringBuffer.prototype.toString = function() {
+  if(goog.userAgent.jscript.HAS_JSCRIPT) {
+    var str = this.buffer_.join("");
+    this.clear();
+    if(str) {
+      this.append(str)
+    }
+    return str
+  }else {
+    return this.buffer_
+  }
+};
+goog.provide("goog.string.format");
+goog.require("goog.string");
+goog.string.format = function(formatString, var_args) {
+  var args = Array.prototype.slice.call(arguments);
+  var template = args.shift();
+  if(typeof template == "undefined") {
+    throw Error("[goog.string.format] Template required");
+  }
+  var formatRe = /%([0\-\ \+]*)(\d+)?(\.(\d+))?([%sfdiu])/g;
+  function replacerDemuxer(match, flags, width, dotp, precision, type, offset, wholeString) {
+    if(type == "%") {
+      return"%"
+    }
+    var value = args.shift();
+    if(typeof value == "undefined") {
+      throw Error("[goog.string.format] Not enough arguments");
+    }
+    arguments[0] = value;
+    return goog.string.format.demuxes_[type].apply(null, arguments)
+  }
+  return template.replace(formatRe, replacerDemuxer)
+};
+goog.string.format.demuxes_ = {};
+goog.string.format.demuxes_["s"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
+  var replacement = value;
+  if(isNaN(width) || width == "" || replacement.length >= width) {
+    return replacement
+  }
+  if(flags.indexOf("-", 0) > -1) {
+    replacement = replacement + goog.string.repeat(" ", width - replacement.length)
+  }else {
+    replacement = goog.string.repeat(" ", width - replacement.length) + replacement
+  }
+  return replacement
+};
+goog.string.format.demuxes_["f"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
+  var replacement = value.toString();
+  if(!(isNaN(precision) || precision == "")) {
+    replacement = value.toFixed(precision)
+  }
+  var sign;
+  if(value < 0) {
+    sign = "-"
+  }else {
+    if(flags.indexOf("+") >= 0) {
+      sign = "+"
+    }else {
+      if(flags.indexOf(" ") >= 0) {
+        sign = " "
+      }else {
+        sign = ""
+      }
+    }
+  }
+  if(value >= 0) {
+    replacement = sign + replacement
+  }
+  if(isNaN(width) || replacement.length >= width) {
+    return replacement
+  }
+  replacement = isNaN(precision) ? Math.abs(value).toString() : Math.abs(value).toFixed(precision);
+  var padCount = width - replacement.length - sign.length;
+  if(flags.indexOf("-", 0) >= 0) {
+    replacement = sign + replacement + goog.string.repeat(" ", padCount)
+  }else {
+    var paddingChar = flags.indexOf("0", 0) >= 0 ? "0" : " ";
+    replacement = sign + goog.string.repeat(paddingChar, padCount) + replacement
+  }
+  return replacement
+};
+goog.string.format.demuxes_["d"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
+  return goog.string.format.demuxes_["f"](parseInt(value, 10), flags, width, dotp, 0, type, offset, wholeString)
+};
+goog.string.format.demuxes_["i"] = goog.string.format.demuxes_["d"];
+goog.string.format.demuxes_["u"] = goog.string.format.demuxes_["d"];
+goog.provide("goog.debug.Error");
+goog.debug.Error = function(opt_msg) {
+  this.stack = (new Error).stack || "";
+  if(opt_msg) {
+    this.message = String(opt_msg)
+  }
+};
+goog.inherits(goog.debug.Error, Error);
+goog.debug.Error.prototype.name = "CustomError";
 goog.provide("goog.asserts");
 goog.provide("goog.asserts.AssertionError");
 goog.require("goog.debug.Error");
@@ -1700,154 +1848,6 @@ goog.object.createSet = function(var_args) {
     rv[arguments[i]] = true
   }
   return rv
-};
-goog.provide("goog.string.format");
-goog.require("goog.string");
-goog.string.format = function(formatString, var_args) {
-  var args = Array.prototype.slice.call(arguments);
-  var template = args.shift();
-  if(typeof template == "undefined") {
-    throw Error("[goog.string.format] Template required");
-  }
-  var formatRe = /%([0\-\ \+]*)(\d+)?(\.(\d+))?([%sfdiu])/g;
-  function replacerDemuxer(match, flags, width, dotp, precision, type, offset, wholeString) {
-    if(type == "%") {
-      return"%"
-    }
-    var value = args.shift();
-    if(typeof value == "undefined") {
-      throw Error("[goog.string.format] Not enough arguments");
-    }
-    arguments[0] = value;
-    return goog.string.format.demuxes_[type].apply(null, arguments)
-  }
-  return template.replace(formatRe, replacerDemuxer)
-};
-goog.string.format.demuxes_ = {};
-goog.string.format.demuxes_["s"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
-  var replacement = value;
-  if(isNaN(width) || width == "" || replacement.length >= width) {
-    return replacement
-  }
-  if(flags.indexOf("-", 0) > -1) {
-    replacement = replacement + goog.string.repeat(" ", width - replacement.length)
-  }else {
-    replacement = goog.string.repeat(" ", width - replacement.length) + replacement
-  }
-  return replacement
-};
-goog.string.format.demuxes_["f"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
-  var replacement = value.toString();
-  if(!(isNaN(precision) || precision == "")) {
-    replacement = value.toFixed(precision)
-  }
-  var sign;
-  if(value < 0) {
-    sign = "-"
-  }else {
-    if(flags.indexOf("+") >= 0) {
-      sign = "+"
-    }else {
-      if(flags.indexOf(" ") >= 0) {
-        sign = " "
-      }else {
-        sign = ""
-      }
-    }
-  }
-  if(value >= 0) {
-    replacement = sign + replacement
-  }
-  if(isNaN(width) || replacement.length >= width) {
-    return replacement
-  }
-  replacement = isNaN(precision) ? Math.abs(value).toString() : Math.abs(value).toFixed(precision);
-  var padCount = width - replacement.length - sign.length;
-  if(flags.indexOf("-", 0) >= 0) {
-    replacement = sign + replacement + goog.string.repeat(" ", padCount)
-  }else {
-    var paddingChar = flags.indexOf("0", 0) >= 0 ? "0" : " ";
-    replacement = sign + goog.string.repeat(paddingChar, padCount) + replacement
-  }
-  return replacement
-};
-goog.string.format.demuxes_["d"] = function(value, flags, width, dotp, precision, type, offset, wholeString) {
-  return goog.string.format.demuxes_["f"](parseInt(value, 10), flags, width, dotp, 0, type, offset, wholeString)
-};
-goog.string.format.demuxes_["i"] = goog.string.format.demuxes_["d"];
-goog.string.format.demuxes_["u"] = goog.string.format.demuxes_["d"];
-goog.provide("goog.userAgent.jscript");
-goog.require("goog.string");
-goog.userAgent.jscript.ASSUME_NO_JSCRIPT = false;
-goog.userAgent.jscript.init_ = function() {
-  var hasScriptEngine = "ScriptEngine" in goog.global;
-  goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ = hasScriptEngine && goog.global["ScriptEngine"]() == "JScript";
-  goog.userAgent.jscript.DETECTED_VERSION_ = goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_ ? goog.global["ScriptEngineMajorVersion"]() + "." + goog.global["ScriptEngineMinorVersion"]() + "." + goog.global["ScriptEngineBuildVersion"]() : "0"
-};
-if(!goog.userAgent.jscript.ASSUME_NO_JSCRIPT) {
-  goog.userAgent.jscript.init_()
-}
-goog.userAgent.jscript.HAS_JSCRIPT = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ? false : goog.userAgent.jscript.DETECTED_HAS_JSCRIPT_;
-goog.userAgent.jscript.VERSION = goog.userAgent.jscript.ASSUME_NO_JSCRIPT ? "0" : goog.userAgent.jscript.DETECTED_VERSION_;
-goog.userAgent.jscript.isVersion = function(version) {
-  return goog.string.compareVersions(goog.userAgent.jscript.VERSION, version) >= 0
-};
-goog.provide("goog.string.StringBuffer");
-goog.require("goog.userAgent.jscript");
-goog.string.StringBuffer = function(opt_a1, var_args) {
-  this.buffer_ = goog.userAgent.jscript.HAS_JSCRIPT ? [] : "";
-  if(opt_a1 != null) {
-    this.append.apply(this, arguments)
-  }
-};
-goog.string.StringBuffer.prototype.set = function(s) {
-  this.clear();
-  this.append(s)
-};
-if(goog.userAgent.jscript.HAS_JSCRIPT) {
-  goog.string.StringBuffer.prototype.bufferLength_ = 0;
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    if(opt_a2 == null) {
-      this.buffer_[this.bufferLength_++] = a1
-    }else {
-      this.buffer_.push.apply(this.buffer_, arguments);
-      this.bufferLength_ = this.buffer_.length
-    }
-    return this
-  }
-}else {
-  goog.string.StringBuffer.prototype.append = function(a1, opt_a2, var_args) {
-    this.buffer_ += a1;
-    if(opt_a2 != null) {
-      for(var i = 1;i < arguments.length;i++) {
-        this.buffer_ += arguments[i]
-      }
-    }
-    return this
-  }
-}
-goog.string.StringBuffer.prototype.clear = function() {
-  if(goog.userAgent.jscript.HAS_JSCRIPT) {
-    this.buffer_.length = 0;
-    this.bufferLength_ = 0
-  }else {
-    this.buffer_ = ""
-  }
-};
-goog.string.StringBuffer.prototype.getLength = function() {
-  return this.toString().length
-};
-goog.string.StringBuffer.prototype.toString = function() {
-  if(goog.userAgent.jscript.HAS_JSCRIPT) {
-    var str = this.buffer_.join("");
-    this.clear();
-    if(str) {
-      this.append(str)
-    }
-    return str
-  }else {
-    return this.buffer_
-  }
 };
 goog.provide("cljs.core");
 goog.require("goog.array");
@@ -20188,8 +20188,148 @@ cljs.core.UUID.prototype.toString = function() {
 cljs.core.UUID;
 goog.provide("actjs.main");
 goog.require("cljs.core");
-actjs.main.probando = function probando() {
-  return 5 + 2
+actjs.main.Response = {};
+actjs.main.listen = function listen(this$, msg) {
+  if(function() {
+    var and__3822__auto____6111 = this$;
+    if(and__3822__auto____6111) {
+      return this$.actjs$main$Response$listen$arity$2
+    }else {
+      return and__3822__auto____6111
+    }
+  }()) {
+    return this$.actjs$main$Response$listen$arity$2(this$, msg)
+  }else {
+    var x__2369__auto____6112 = this$ == null ? null : this$;
+    return function() {
+      var or__3824__auto____6113 = actjs.main.listen[goog.typeOf(x__2369__auto____6112)];
+      if(or__3824__auto____6113) {
+        return or__3824__auto____6113
+      }else {
+        var or__3824__auto____6114 = actjs.main.listen["_"];
+        if(or__3824__auto____6114) {
+          return or__3824__auto____6114
+        }else {
+          throw cljs.core.missing_protocol.call(null, "Response.listen", this$);
+        }
+      }
+    }().call(null, this$, msg)
+  }
 };
-4 + 3;
-alert("hi");
+actjs.main.spawn = function spawn(actor) {
+  return cljs.core.atom.call(null, cljs.core.ObjMap.fromObject(["\ufdd0'mail", "\ufdd0'not_matched", "\ufdd0'actor"], {"\ufdd0'mail":cljs.core.List.EMPTY, "\ufdd0'not_matched":cljs.core.List.EMPTY, "\ufdd0'actor":actor}))
+};
+actjs.main.extract_next_exec = function extract_next_exec(p__6115) {
+  var map__6121__6122 = p__6115;
+  var map__6121__6123 = cljs.core.seq_QMARK_.call(null, map__6121__6122) ? cljs.core.apply.call(null, cljs.core.hash_map, map__6121__6122) : map__6121__6122;
+  var actor_data__6124 = map__6121__6123;
+  var keys__6125 = cljs.core._lookup.call(null, map__6121__6123, cljs.core.PersistentVector.fromArray([actjs.main.mail, actjs.main.next_mail], true), null);
+  if(cljs.core.next) {
+    return cljs.core.dissoc.call(null, actor_data__6124, "\ufdd0'dispatch")
+  }else {
+    return cljs.core.assoc.call(null, actor_data__6124, "\ufdd0'dispatch", true, "\ufdd0'mail", cljs.core.butlast.call(null, actjs.main.mail), "\ufdd0'next-mail", cljs.core.last.call(null, actjs.main.mail))
+  }
+};
+actjs.main.consume_next_execution = function consume_next_execution(actor_data) {
+  return cljs.core.dissoc.call(null, actor_data, "\ufdd0'next-mail")
+};
+actjs.main.become = function become(actor_data, new_actor, not_mathed, mail) {
+  return cljs.core.assoc.call(null, actor_data, "\ufdd0'actor", new_actor, "\ufdd0'not-matched", cljs.core.List.EMPTY, "\ufdd0'mail", cljs.core.concat.call(null, actjs.main.not_matched, mail))
+};
+actjs.main.become_BANG_ = function become_BANG_(actor_atom, new_actor) {
+  return cljs.core.swap_BANG_.call(null, actor_atom, actjs.main.become, new_actor)
+};
+actjs.main.push_not_matched = function push_not_matched(p__6126, msg) {
+  var map__6132__6133 = p__6126;
+  var map__6132__6134 = cljs.core.seq_QMARK_.call(null, map__6132__6133) ? cljs.core.apply.call(null, cljs.core.hash_map, map__6132__6133) : map__6132__6133;
+  var actor_data__6135 = map__6132__6134;
+  var keys__6136 = cljs.core._lookup.call(null, map__6132__6134, cljs.core.PersistentVector.fromArray([actjs.main.not_matched], true), null);
+  return cljs.core.assoc.call(null, actor_data__6135, "\ufdd0'not-matched", cljs.core.conj.call(null, actjs.main.not_matched, msg))
+};
+actjs.main.push_not_matched_BANG_ = function push_not_matched_BANG_(actor_atom, msg) {
+  return cljs.core.swap_BANG_.call(null, actjs.main.push_not_matched, actor_atom, msg)
+};
+actjs.main.run_actor = function run_actor(msg, actor_atom) {
+  return function() {
+    var result__6146 = actjs.main.listen.call(null, actjs.main.actor, msg);
+    var map__6145__6147 = actjs.main.consume_next_execution.call(null);
+    var map__6145__6148 = cljs.core.seq_QMARK_.call(null, map__6145__6147) ? cljs.core.apply.call(null, cljs.core.hash_map, map__6145__6147) : map__6145__6147;
+    var keys__6149 = cljs.core._lookup.call(null, map__6145__6148, cljs.core.PersistentVector.fromArray([actjs.main.actor], true), null);
+    if(result__6146 == null) {
+      actjs.main.become_BANG_.call(null, actor_atom, null)
+    }else {
+      if(function() {
+        var G__6150__6151 = result__6146;
+        if(G__6150__6151) {
+          if(cljs.core.truth_(function() {
+            var or__3824__auto____6152 = null;
+            if(cljs.core.truth_(or__3824__auto____6152)) {
+              return or__3824__auto____6152
+            }else {
+              return G__6150__6151.actjs$main$Response$
+            }
+          }())) {
+            return true
+          }else {
+            if(!G__6150__6151.cljs$lang$protocol_mask$partition$) {
+              return cljs.core.type_satisfies_.call(null, actjs.main.Response, G__6150__6151)
+            }else {
+              return false
+            }
+          }
+        }else {
+          return cljs.core.type_satisfies_.call(null, actjs.main.Response, G__6150__6151)
+        }
+      }()) {
+        actjs.main.become_BANG_.call(null, actor_atom, result__6146)
+      }else {
+        if(cljs.core._EQ_.call(null, "\ufdd0'not-matched", result__6146)) {
+          actjs.main.push_not_matched_BANG_.call(null, actor_atom, msg)
+        }else {
+        }
+      }
+    }
+    if(cljs.core.truth_(result__6146)) {
+      return actjs.main.dispatch_execution.call(null, actor_atom)
+    }else {
+      return null
+    }
+  }
+};
+actjs.main.dispatch_execution = function dispatch_execution(actor_atom) {
+  var map__6158__6159 = cljs.core.swap_BANG_.call(null, actjs.main.extract_next_exec, actor_atom);
+  var map__6158__6160 = cljs.core.seq_QMARK_.call(null, map__6158__6159) ? cljs.core.apply.call(null, cljs.core.hash_map, map__6158__6159) : map__6158__6159;
+  var keys__6161 = cljs.core._lookup.call(null, map__6158__6160, cljs.core.PersistentVector.fromArray([actjs.main.next_mail, actjs.main.dispatch], true), null);
+  if(cljs.core.truth_(function() {
+    var and__3822__auto____6162 = cljs.core.next;
+    if(and__3822__auto____6162) {
+      return actjs.main.dispatch
+    }else {
+      return and__3822__auto____6162
+    }
+  }())) {
+    return setTimeout(actjs.main.run_actor.call(null, actjs.main.next_mail, actor_atom), 1)
+  }else {
+    return null
+  }
+};
+actjs.main.push_mail = function push_mail(p__6163, msg) {
+  var map__6169__6170 = p__6163;
+  var map__6169__6171 = cljs.core.seq_QMARK_.call(null, map__6169__6170) ? cljs.core.apply.call(null, cljs.core.hash_map, map__6169__6170) : map__6169__6170;
+  var actor_data__6172 = map__6169__6171;
+  var keys__6173 = cljs.core._lookup.call(null, map__6169__6171, cljs.core.PersistentVector.fromArray([actjs.main.mail], true), null);
+  return cljs.core.assoc.call(null, actor_data__6172, "\ufdd0'mail", cljs.core.conj.call(null, actjs.main.mail, msg))
+};
+actjs.main.send_BANG_ = function send_BANG_(msg, actor_atom) {
+  cljs.core.swap_BANG_.call(null, actor_atom, actjs.main.push_mail, msg);
+  return actjs.main.dispatch_execution.call(null, actor_atom)
+};
+actjs.main.Echoer = function(counter) {
+  this.counter = counter
+};
+actjs.main.Echoer.cljs$lang$type = true;
+actjs.main.Echoer.cljs$lang$ctorPrSeq = function(this__2316__auto__) {
+  return cljs.core.list.call(null, "actjs.main/Echoer")
+};
+actjs.main.Echoer;
+[cljs.core.str(new actjs.main.Echoer(1))].join("");
