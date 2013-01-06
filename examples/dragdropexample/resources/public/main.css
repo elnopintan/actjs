@@ -1,0 +1,21 @@
+#rectangle 
+{
+  width: 1000px;
+  height: 500px;
+  border: solid;
+}
+
+.square
+{
+  border-color: red;
+  width: 50px;
+  height: 50px;
+  border-style: solid;
+  position:absolute;
+  top: 50px;
+  left: 50px;
+}
+
+.pos
+{
+}
