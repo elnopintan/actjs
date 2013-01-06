@@ -40,10 +40,10 @@
 (defrecord Dragged [dragged-node deltaX deltaY]
   act/Response
   (listen [this [command {:keys [posX posY]}]]
-            "When an object is dragged this state records which node is dragged and the difference between
-  						node and mouse positions.
-  					:move event updates positions
-  					:drop event returns the surface to Empty state"
+          "When an object is dragged this state records which node is dragged and the difference between
+  				node and mouse positions.
+  				:move event updates positions
+  				:drop event returns the surface to Empty state"
            (do 
             (change-pos! dragged-node (- posX deltaX) (- posY deltaY))
           	(cond
