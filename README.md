@@ -6,14 +6,14 @@ Clojurescript library that implements the actor model for use in browsers.
 
 The actor behaviour is implemented using Response protocol and its listen method
 
- (ns hello.core 
-   (:require [actjs.main :as act]))
+    (ns hello.core 
+      (:require [actjs.main :as act]))
    
- (defrecord HelloWorld []
-   act/Response
-  (listen [this msg]
-		 (js/console (str "Hello " msg))
-     this))
+    (defrecord HelloWorld []
+      act/Response
+     (listen [this msg]
+		    (js/console (str "Hello " msg))
+        this))
      
 If listen returns another Response (like this in the example) the given actor will loop
 and listen new events using that Response object as its new behaviour.
@@ -21,11 +21,12 @@ If listen returns :not-matched, the event will be delayed to be received by a fu
 If listen returns any other data, the actor will end its execution.
 
 To create a new actor, use spawn function:
- (def hello (act/spawn (HelloWorld.)))
+    (def hello (act/spawn (HelloWorld.)))
 
 To send a message to an actor user send! function
- (send! "Nacho" hello)
+    (send! "Nacho" hello)
  
+For a more detailed example look in An [examples](https://github.com/elnopintan/actjs/tree/master/examples) folder.
 
 ## License
 
