@@ -21,12 +21,14 @@ If listen returns :not-matched, the event will be delayed to be received by a fu
 If listen returns any other data, the actor will end its execution.
 
 To create a new actor, use spawn function:
+
     (def hello (act/spawn (HelloWorld.)))
 
 To send a message to an actor user send! function
+
     (send! "Nacho" hello)
  
-For a more detailed example look in An [examples](https://github.com/elnopintan/actjs/tree/master/examples) folder.
+Look [examples](https://github.com/elnopintan/actjs/tree/master/examples) for more detailed info.
 
 ## License
 
