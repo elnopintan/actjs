@@ -1,13 +1,4 @@
 # dragdropexample
 
-A Clojure library designed to ... well, that part is up to you.
+Example of drag and drop implementation using actjs library
 
-## Usage
-
-FIXME
-
-## License
-
-Copyright © 2013 FIXME
-
-Distributed under the Eclipse Public License, the same as Clojure.
